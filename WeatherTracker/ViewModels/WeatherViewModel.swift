@@ -15,10 +15,11 @@ class WeatherViewModel: ObservableObject {
     @Published var errorMessage: String?
     @Published var searchResults: [WeatherData] = []
     
-    private let weatherService = WeatherService()
+    var weatherService: WeatherService
     private let userDefaultsKey = "SavedCity"
     
-    init() {
+    init(weatherService: WeatherService) {
+        self.weatherService = weatherService
         loadSavedCityWeather()
     }
     

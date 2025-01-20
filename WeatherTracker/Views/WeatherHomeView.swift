@@ -8,7 +8,7 @@
 import SwiftUI
 
 struct WeatherHomeView: View {
-    @StateObject private var viewModel = WeatherViewModel()
+    @StateObject private var viewModel = WeatherViewModel(weatherService: WeatherService())
     @State private var searchText: String = ""
     @FocusState private var isSearchFieldFocused: Bool
     
