@@ -12,23 +12,47 @@ class WeatherService {
     private let baseURL = "https://api.weatherapi.com/v1/current.json"
     
     func fetchWeather(for city: String) async throws -> WeatherData {
-        let urlString = "\(baseURL)?key=\(apiKey)&q=\(city)"
-        guard let url = URL(string: urlString) else {
+        guard let url = URL(string: "\(baseURL)?key=\(apiKey)&q=\(city)") else {
             throw URLError(.badURL)
         }
         
-        let (data, _) = try await URLSession.shared.data(from: url)
-        return try JSONDecoder().decode(WeatherData.self, from: data)
+        do {
+            let (data, response) = try await URLSession.shared.data(from: url)
+            guard (response as? HTTPURLResponse)?.statusCode == 200 else {
+                throw WeatherServiceError.invalidResponse
+            }
+            return try JSONDecoder().decode(WeatherData.self, from: data)
+        } catch URLError.notConnectedToInternet {
+            throw WeatherServiceError.noNetwork
+        } catch is DecodingError {
+            throw WeatherServiceError.decodingError
+        } catch {
+            throw WeatherServiceError.unknownError
+        }
     }
     
     func fetchLocations(for query: String) async throws -> [Location] {
-        let url = URL(string: "https://api.weatherapi.com/v1/search.json?key=\(apiKey)&q=\(query)")!
-        let (data, _) = try await URLSession.shared.data(from: url)
+        guard let url = URL(string: "https://api.weatherapi.com/v1/search.json?key=\(apiKey)&q=\(query)") else {
+            throw WeatherServiceError.invalidResponse
+        }
+        
         do {
+            let (data, response) = try await URLSession.shared.data(from: url)
+            guard (response as? HTTPURLResponse)?.statusCode == 200 else {
+                throw WeatherServiceError.invalidResponse
+            }
+            
             let locations = try JSONDecoder().decode([Location].self, from: data)
+            if locations.isEmpty {
+                throw WeatherServiceError.noResults
+            }
             return locations
+        } catch URLError.notConnectedToInternet {
+            throw WeatherServiceError.noNetwork
+        } catch is DecodingError {
+            throw WeatherServiceError.decodingError
         } catch {
-            return []
+            throw WeatherServiceError.unknownError
         }
     }
     
@@ -50,7 +74,35 @@ class WeatherService {
             for try await weatherData in group.compactMap({ $0 }) {
                 results.append(weatherData)
             }
+            
+            if results.isEmpty {
+                throw WeatherServiceError.noResults
+            }
+            
             return results
+        }
+    }
+}
+
+enum WeatherServiceError: Error, LocalizedError {
+    case noNetwork
+    case invalidResponse
+    case noResults
+    case decodingError
+    case unknownError
+    
+    var errorDescription: String {
+        switch self {
+        case .noNetwork:
+            return "No internet connection. Please check your network and try again."
+        case .invalidResponse:
+            return "Invalid response from the server."
+        case .noResults:
+            return "No results found. Try searching for a city."
+        case .decodingError:
+            return "Failed to decode data."
+        case .unknownError:
+            return "An unknown error occurred. Please try again."
         }
     }
 }

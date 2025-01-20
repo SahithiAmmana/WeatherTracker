@@ -8,6 +8,7 @@
 import SwiftUI
 
 struct WeatherHomeView: View {
+    @Environment(\.scenePhase) private var scenePhase
     @StateObject private var viewModel = WeatherViewModel(weatherService: WeatherService())
     @State private var searchText: String = ""
     @FocusState private var isSearchFieldFocused: Bool
@@ -17,27 +18,50 @@ struct WeatherHomeView: View {
             VStack {
                 Spacer().frame(height: 20)
                 SearchView(searchText: $searchText, isSearchFieldFocused: $isSearchFieldFocused) { query in
+                    guard !query.isEmpty else { return }
                     Task {
                         await viewModel.searchLocations(for: query)
                     }
                 }
-                                
-                if viewModel.isSearching {
-                    searchingView
-                } else if !viewModel.searchResults.isEmpty {
-                    searchResultsView
-                } else if !searchText.isEmpty {
-                    noResultsView
-                } else {
-                    savedCityView
+                
+                ScrollView {
+                    if let errorMessage = viewModel.errorMessage {
+                        errorView(errorMessage)
+                    } else if viewModel.isSearching {
+                        searchingView
+                    } else if !viewModel.searchResults.isEmpty {
+                        searchResultsView
+                    } else if !searchText.isEmpty {
+                        noResultsView
+                    } else {
+                        savedCityView
+                    }
+                }
+                .refreshable {
+                    viewModel.loadSavedCityWeather()
                 }
                 
                 Spacer()
             }
+            .onTapGesture {
+                isSearchFieldFocused = false
+            }
         }
         .ignoresSafeArea(.keyboard, edges: .bottom)
-        .onAppear {
-            viewModel.loadSavedCityWeather()
+        .onChange(of: scenePhase) { _, newPhase in
+            if newPhase == .active {
+                viewModel.loadSavedCityWeather()
+            }
+        }
+    }
+    
+    private func errorView(_ message: String) -> some View {
+        VStack {
+            Spacer()
+            Text(message)
+                .font(.custom("Poppins-Medium", size: 15))
+                .padding()
+            Spacer()
         }
     }
     
@@ -82,8 +106,8 @@ struct WeatherHomeView: View {
     
     private var noResultsView: some View {
         VStack {
-            Text("No results found. Try searching for a city.")
-                .font(.custom("Poppins-Regular", size: 20))
+            Text(WeatherServiceError.noResults.errorDescription)
+                .font(.custom("Poppins-Regular", size: 15))
                 .foregroundColor(.gray)
             Spacer()
         }
